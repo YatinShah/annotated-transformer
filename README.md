@@ -13,6 +13,7 @@ http://nlp.seas.harvard.edu/annotated-transformer/
 
 Use `requirements.txt` to install library dependencies with pip:
 
+*Use Python 3.10.19 version for the project.*
 ```
 pip install -r requirements.txt
 ```
@@ -66,3 +67,8 @@ make flake
 (or manually call flake8 `flake8 --show-source the_annotated_transformer.py) to check for PEP8 violations.
 
 It's recommended to run these two commands and fix any flake8 errors that arise, when submitting a PR, otherwise the github actions CI will report an error.
+
+
+
+
+. .venv/bin/activate && python -m pip install --upgrade pip setuptools wheel && python -m pip install -r requirements.txt
