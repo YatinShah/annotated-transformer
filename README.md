@@ -13,7 +13,7 @@ http://nlp.seas.harvard.edu/annotated-transformer/
 
 Use `requirements.txt` to install library dependencies with pip:
 
-*Use Python 3.10.19 version for the project.*
+*Use Python 3.12.x version for the project.*
 ```
 pip install -r requirements.txt
 ```

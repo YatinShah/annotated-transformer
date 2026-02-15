@@ -118,10 +118,15 @@ import time
 from torch.optim.lr_scheduler import LambdaLR
 import pandas as pd
 import altair as alt
-from torchtext.data.functional import to_map_style_dataset
 from torch.utils.data import DataLoader
-from torchtext.vocab import build_vocab_from_iterator
-import torchtext.datasets as datasets
+try:
+    from torchtext.data.functional import to_map_style_dataset
+    from torchtext.vocab import build_vocab_from_iterator
+    import torchtext.datasets as datasets
+    TORCHTEXT_AVAILABLE = True
+except Exception:
+    TORCHTEXT_AVAILABLE = False
+
 import spacy
 import GPUtil
 import warnings
@@ -176,6 +181,36 @@ class DummyOptimizer(torch.optim.Optimizer):
 class DummyScheduler:
     def step(self):
         None
+
+
+class SimpleVocab:
+    """Minimal fallback vocab used when torchtext is unavailable.
+
+    Provides the small subset of the torchtext `Vocab` API that this
+    notebook relies on: callable->indices, `set_default_index`,
+    `get_stoi`, `__len__` and token lookup `vocab[token]`.
+    """
+
+    def __init__(self, tokens, specials=None):
+        specials = specials or ["<s>", "</s>", "<blank>", "<unk>"]
+        self._itos = list(specials) + list(dict.fromkeys(tokens))
+        self._stoi = {tok: i for i, tok in enumerate(self._itos)}
+        self._default = self._stoi.get("<unk>", 0)
+
+    def __call__(self, token_list):
+        return [self._stoi.get(t, self._default) for t in token_list]
+
+    def __len__(self):
+        return len(self._itos)
+
+    def set_default_index(self, idx):
+        self._default = idx
+
+    def get_stoi(self):
+        return self._stoi
+
+    def __getitem__(self, token):
+        return self._stoi.get(token, self._default)
 
 
 # %% [markdown] id="jx49WRyfTsp-"
@@ -1434,6 +1469,18 @@ def yield_tokens(data_iter, tokenizer, index):
 
 
 def build_vocabulary(spacy_de, spacy_en):
+    # If torchtext isn't importable in this environment, return small
+    # sample vocabularies so examples can still run offline.
+    if not globals().get("TORCHTEXT_AVAILABLE", False):
+        warnings.warn(
+            "torchtext not available — using small in-memory sample vocabs"
+        )
+        vocab_src = SimpleVocab(["das", "ist", "ein"], specials=["<s>", "</s>", "<blank>", "<unk>"])
+        vocab_src.set_default_index(vocab_src["<unk>"])
+        vocab_tgt = SimpleVocab(["this", "is", "a"], specials=["<s>", "</s>", "<blank>", "<unk>"])
+        vocab_tgt.set_default_index(vocab_tgt["<unk>"])
+        return vocab_src, vocab_tgt
+
     def tokenize_de(text):
         return tokenize(text, spacy_de)
 
@@ -1476,25 +1523,41 @@ def load_vocab(spacy_de, spacy_en):
 
 if is_interactive_notebook():
     # global variables used later in the script
-    spacy_de, spacy_en = show_example(load_tokenizers)
-    try:
-        vocab_src, vocab_tgt = show_example(load_vocab, args=[spacy_de, spacy_en])
-    except Exception as e:
-        # If dataset download fails (network/certificate/firewall), fall back to
-        # small in-memory vocabularies so the rest of the examples can run.
-        warnings.warn(
-            f"Could not download/build datasets: {e} — falling back to sample vocabs."
-        )
-        vocab_src = build_vocab_from_iterator(
-            [["das", "ist", "ein"]],
-            specials=["<s>", "</s>", "<blank>", "<unk>"],
-        )
-        vocab_src.set_default_index(vocab_src["<unk>"])
-        vocab_tgt = build_vocab_from_iterator(
-            [["this", "is", "a"]],
-            specials=["<s>", "</s>", "<blank>", "<unk>"],
-        )
-        vocab_tgt.set_default_index(vocab_tgt["<unk>"])
+    _tokenizers_res = show_example(load_tokenizers)
+    if _tokenizers_res is None:
+        # fall back to minimal blank tokenizers so downstream examples don't crash
+        try:
+            spacy_de = spacy.blank("de")
+            spacy_en = spacy.blank("en")
+        except Exception:
+            spacy_de = None
+            spacy_en = None
+    else:
+        spacy_de, spacy_en = _tokenizers_res
+
+    # load vocab; show_example returns None on failure, so handle that case
+    _vocab_res = show_example(load_vocab, args=[spacy_de, spacy_en])
+    if _vocab_res is None:
+        warnings.warn("Could not download/build datasets — falling back to sample vocabs.")
+        if globals().get("TORCHTEXT_AVAILABLE", False):
+            vocab_src = build_vocab_from_iterator(
+                [["das", "ist", "ein"]],
+                specials=["<s>", "</s>", "<blank>", "<unk>"],
+            )
+            vocab_src.set_default_index(vocab_src["<unk>"])
+            vocab_tgt = build_vocab_from_iterator(
+                [["this", "is", "a"]],
+                specials=["<s>", "</s>", "<blank>", "<unk>"],
+            )
+            vocab_tgt.set_default_index(vocab_tgt["<unk>"])
+        else:
+            # use the lightweight SimpleVocab fallback
+            vocab_src = SimpleVocab(["das", "ist", "ein"], specials=["<s>", "</s>", "<blank>", "<unk>"])
+            vocab_src.set_default_index(vocab_src["<unk>"])
+            vocab_tgt = SimpleVocab(["this", "is", "a"], specials=["<s>", "</s>", "<blank>", "<unk>"])
+            vocab_tgt.set_default_index(vocab_tgt["<unk>"])
+    else:
+        vocab_src, vocab_tgt = _vocab_res
 
 
 # %% [markdown] id="-l-TFwzfTsqL"
@@ -1600,6 +1663,17 @@ def create_dataloaders(
             max_padding=max_padding,
             pad_id=vocab_src.get_stoi()["<blank>"],
         )
+
+    if not globals().get("TORCHTEXT_AVAILABLE", False):
+        # torchtext isn't available — provide tiny in-memory dataloaders
+        sample = [("das ist ein beispiel", "this is an example")] * 16
+        train_dataloader = DataLoader(
+            sample, batch_size=batch_size, shuffle=True, collate_fn=collate_fn
+        )
+        valid_dataloader = DataLoader(
+            sample, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
+        )
+        return train_dataloader, valid_dataloader
 
     train_iter, valid_iter, test_iter = datasets.Multi30k(
         language_pair=("de", "en")
