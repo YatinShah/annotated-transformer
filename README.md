@@ -69,6 +69,20 @@ make flake
 It's recommended to run these two commands and fix any flake8 errors that arise, when submitting a PR, otherwise the github actions CI will report an error.
 
 
+## To run the file.
+# 1) activate venv
+source .venv/bin/activate
+
+# 2) install dependencies + jupyter tools (if not already)
+pip install -r requirements.txt
 
 
-. .venv/bin/activate && python -m pip install --upgrade pip setuptools wheel && python -m pip install -r requirements.txt
+## To run the file in Jupiter notebook, these extra steps are needed
+# 3) install i[y kernel] 
+pip install ipykernel jupyterlab
+
+# 4) register this venv as a Jupyter kernel
+python -m ipykernel install --user --name annotated-transformer --display-name "Python (annotated-transformer .venv)"
+
+# 5) start Jupyter Lab (or open a notebook in VS Code and pick the new kernel)
+jupyter lab
