@@ -1,6 +1,10 @@
 Code for The Annotated Transformer blog post:
 
-http://nlp.seas.harvard.edu/annotated-transformer/
+[source](http://nlp.seas.harvard.edu/annotated-transformer/)
+[article](https://nlp.seas.harvard.edu/2018/04/03/attention.html)
+[theory](https://jalammar.github.io/illustrated-transformer/)
+[Alternate](https://github.com/rasbt/LLMs-from-scratch?tab=readme-ov-file)
+[Sebastian Raschka](https://sebastianraschka.com/books/)
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/harvardnlp/annotated-transformer/blob/master/AnnotatedTransformer.ipynb)
 
